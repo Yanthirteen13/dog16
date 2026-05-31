@@ -1,0 +1,31 @@
+{
+  "name": "dog16",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "15.1.6",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "openai": "^4.77.0",
+    "qrcode": "^1.5.4",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@types/qrcode": "^1.5.5",
+    "tailwindcss": "^3.4.17",
+    "postcss": "^8.5.1",
+    "autoprefixer": "^10.4.20"
+  }
+}
