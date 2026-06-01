@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BrandPawLogo,
   DoodleLightning,
@@ -21,23 +21,28 @@ const STEPS = [
 export default function GeneratingPage() {
   const router = useRouter();
   const started = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [progress, setProgress] = useState(6);
   const [stepIdx, setStepIdx] = useState(0);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-
+  // Runs (or re-runs) generation from the answers stashed in sessionStorage,
+  // so a retry after failure does NOT make the user re-answer the quiz.
+  const run = useCallback(() => {
     const raw = sessionStorage.getItem("dog16_pending");
     if (!raw) {
       router.replace("/test");
       return;
     }
 
+    setError("");
+    setProgress(6);
+    setStepIdx(0);
+
     // fake progress that eases toward ~92% while we wait
+    if (timerRef.current) clearInterval(timerRef.current);
     const startedAt = Date.now();
-    const timer = setInterval(() => {
+    timerRef.current = setInterval(() => {
       const elapsed = (Date.now() - startedAt) / 1000;
       const eased = 92 * (1 - Math.exp(-elapsed / 18));
       setProgress((p) => Math.max(p, Math.min(92, Math.round(eased))));
@@ -58,16 +63,23 @@ export default function GeneratingPage() {
         const { report_id } = await res.json();
         sessionStorage.removeItem("dog16_pending");
         setProgress(100);
-        clearInterval(timer);
+        if (timerRef.current) clearInterval(timerRef.current);
         setTimeout(() => router.replace(`/report/${report_id}`), 500);
       } catch (err) {
-        clearInterval(timer);
+        if (timerRef.current) clearInterval(timerRef.current);
         setError(err instanceof Error ? err.message : "生成失败，请重试");
       }
     })();
-
-    return () => clearInterval(timer);
   }, [router]);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    run();
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [run]);
 
   if (error) {
     return (
@@ -80,11 +92,20 @@ export default function GeneratingPage() {
             哎呀，出了点状况
           </h1>
           <p className="mt-2 text-sm font-medium text-roast-muted">{error}</p>
+          <p className="mt-1 text-xs font-medium text-roast-muted">
+            鉴定师可能在忙，重试一下通常就好了，答案已经帮你保留
+          </p>
           <button
-            onClick={() => router.replace("/test")}
+            onClick={run}
             className="mt-6 inline-flex items-center justify-center rounded-full border-2 border-roast-ink bg-roast-pink px-8 py-3.5 text-base font-black text-white shadow-[4px_5px_0_0_#251F2D] transition active:translate-x-0.5 active:translate-y-0.5 active:shadow-[2px_2px_0_0_#251F2D]"
           >
-            返回重新鉴定
+            重试一次 →
+          </button>
+          <button
+            onClick={() => router.replace("/test")}
+            className="mt-3 text-sm font-bold text-roast-muted underline underline-offset-4"
+          >
+            返回重新填写
           </button>
         </main>
       </div>
