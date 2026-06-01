@@ -2,6 +2,8 @@
 
 一个 MBTI 风格的趣味测评网站：上传狗狗照片、回答 24+1 道问题，由 AI 生成一份"奶油毒舌"风格的主子人格报告，并可一键导出**方形朋友圈分享海报**与**完整 PDF 报告**。
 
+🔗 **在线体验**：https://dog16.vercel.app
+
 ![报告效果预览](public/reference.png)
 
 > 全栈 Next.js（App Router）应用，AI 报告生成支持 Anthropic Claude 或 DeepSeek（二选一）。本地开发用文件系统存储，无需数据库；部署到 Vercel 时自动切换为 Vercel Blob 存储（见下方「部署到 Vercel」）。

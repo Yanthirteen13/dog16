@@ -38,3 +38,6 @@ yarn-error.log*
 # local editor / Claude Code settings (keep project-shared launch.json, ignore personal ones)
 .claude/settings.local.json
 .claude/settings.json
+
+.vercel
+.env*
