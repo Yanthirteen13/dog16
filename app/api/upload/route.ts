@@ -31,6 +31,19 @@ export async function POST(req: NextRequest) {
   const name = `${Date.now().toString(36)}${Math.random()
     .toString(36)
     .slice(2, 8)}.${ext}`;
+
+  // Serverless hosts (Vercel) have an ephemeral filesystem, so when a Blob
+  // token is present we store uploads in Vercel Blob and return its public URL.
+  // Local development falls back to writing under public/uploads.
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const { put } = await import("@vercel/blob");
+    const blob = await put(`uploads/${name}`, buf, {
+      access: "public",
+      contentType: file.type,
+    });
+    return NextResponse.json({ url: blob.url });
+  }
+
   const dir = path.join(process.cwd(), "public", "uploads");
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, name), buf);
