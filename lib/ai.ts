@@ -84,10 +84,18 @@ function parseAIJson(raw: string): AIContent {
   return JSON.parse(text) as AIContent;
 }
 
+// Per-call timeout and retry budget are kept well under the route's 60s
+// maxDuration so two full attempts (incl. one retry) still finish in time.
+const PER_CALL_TIMEOUT_MS = 24_000;
+const MAX_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 800;
+
 async function callDeepSeek(system: string, user: string): Promise<string> {
   const client = new OpenAI({
     apiKey: process.env.DEEPSEEK_API_KEY,
     baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
+    timeout: PER_CALL_TIMEOUT_MS,
+    maxRetries: 0, // we handle retries ourselves to stay within the time budget
   });
   const res = await client.chat.completions.create({
     model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
@@ -97,16 +105,20 @@ async function callDeepSeek(system: string, user: string): Promise<string> {
     ],
     response_format: { type: "json_object" },
     temperature: 1.1,
-    max_tokens: 2200,
+    max_tokens: 3000,
   });
   return res.choices[0]?.message?.content ?? "";
 }
 
 async function callAnthropic(system: string, user: string): Promise<string> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    timeout: PER_CALL_TIMEOUT_MS,
+    maxRetries: 0,
+  });
   const res = await client.messages.create({
     model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
-    max_tokens: 2200,
+    max_tokens: 3000,
     temperature: 1,
     system,
     messages: [{ role: "user", content: user }],
@@ -118,10 +130,29 @@ async function callAnthropic(system: string, user: string): Promise<string> {
 export async function generateAIContent(input: GenInput): Promise<AIContent> {
   const provider = (process.env.AI_PROVIDER || "deepseek").toLowerCase();
   const user = buildUserPrompt(input);
-  const raw =
-    provider === "anthropic"
-      ? await callAnthropic(SYSTEM_PROMPT, user)
-      : await callDeepSeek(SYSTEM_PROMPT, user);
-  if (!raw) throw new Error("AI 返回为空");
-  return parseAIJson(raw);
+
+  // The model occasionally returns an empty body or slightly malformed JSON
+  // (especially under load). Retry a couple of times before giving up so a
+  // single transient hiccup doesn't fail the whole report.
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const raw =
+        provider === "anthropic"
+          ? await callAnthropic(SYSTEM_PROMPT, user)
+          : await callDeepSeek(SYSTEM_PROMPT, user);
+      if (!raw.trim()) throw new Error("AI 返回为空");
+      return parseAIJson(raw);
+    } catch (err) {
+      lastErr = err;
+      console.error(
+        `[ai] 第 ${attempt}/${MAX_ATTEMPTS} 次生成失败:`,
+        err instanceof Error ? err.message : err,
+      );
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("AI 生成失败");
 }
